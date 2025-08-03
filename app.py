@@ -1,7 +1,7 @@
 # app.py
 from flask import Flask, render_template, request
-from datetime import datetime, timedelta
 from korean_lunar_calendar import KoreanLunarCalendar
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -15,168 +15,166 @@ ZODIAC = "쥐 소 호랑이 토끼 용 뱀 말 양 원숭이 닭 개 돼지".spl
 # 60갑자 순서
 SIXTY_GAPJA = [CHEONGAN[i % 10] + JIJI[i % 12] for i in range(60)]
 
-# 24절기 이름
-SOLAR_TERMS_KO = [
-    '입춘', '우수', '경칩', '춘분', '청명', '곡우',
-    '입하', '소만', '망종', '하지', '소서', '대서',
-    '입추', '처서', '백로', '추분', '한로', '상강',
-    '입동', '소설', '대설', '동지', '소한', '대한'
-]
+# 24절기 날짜 계산을 위한 간단한 테이블 (근사치)
+SOLAR_TERMS_APPROX = {
+    '소한': (1, 6), '대한': (1, 20),
+    '입춘': (2, 4), '우수': (2, 19),
+    '경칩': (3, 6), '춘분': (3, 21),
+    '청명': (4, 5), '곡우': (4, 20),
+    '입하': (5, 6), '소만': (5, 21),
+    '망종': (6, 6), '하지': (6, 21),
+    '소서': (7, 7), '대서': (7, 23),
+    '입추': (8, 8), '처서': (8, 23),
+    '백로': (9, 8), '추분': (9, 23),
+    '한로': (10, 8), '상강': (10, 23),
+    '입동': (11, 7), '소설': (11, 22),
+    '대설': (12, 7), '동지': (12, 22)
+}
 
-calendar = KoreanLunarCalendar()
 
-def get_solar_terms_for_year(year):
-    """특정 연도의 24절기 날짜와 시간(datetime 객체)을 가져옵니다."""
-    calendar.set_solar_date(year, 1, 1)
-    solar_terms = {}
-    for i in range(24):
-        st_name = SOLAR_TERMS_KO[i]
-        # 정확한 절기 시간을 얻기 위해 KoreanLunarCalendar 사용
-        st_datetime_str = calendar.solar_term_24[i]
-        st_datetime = datetime.strptime(f"{year}/{st_datetime_str}", "%Y/%m/%d %H:%M")
-        solar_terms[st_name] = st_datetime
-    return solar_terms
+def get_solar_term_date(year, term_name):
+    """특정 년도의 절기 날짜를 계산 (근사치)"""
+    month, day = SOLAR_TERMS_APPROX[term_name]
+    return datetime(year, month, day)
 
-def get_year_pillar(year, month, day, hour, minute):
-    """년주(Year Pillar) 계산"""
-    current_date = datetime(year, month, day, hour, minute)
+
+def get_year_pillar(year):
+    """년주(Year Pillar) 계산 - korean_lunar_calendar 라이브러리 사용"""
+    try:
+        calendar = KoreanLunarCalendar()
+        # 해당 년도의 임의 날짜로 설정 (1월 15일)
+        if calendar.setSolarDate(year, 1, 15):
+            gapja_string = calendar.getGapJaString()
+            # "갑자년 정축월 무인일" 형식에서 년주만 추출
+            year_pillar = gapja_string.split()[0][:-1]  # "갑자년"에서 "년" 제거
+            zodiac = ZODIAC[(year - 4) % 12]
+            return year_pillar, zodiac
+    except:
+        pass
     
-    # 해당 연도의 입춘 시간 가져오기
-    solar_terms = get_solar_terms_for_year(year)
-    ipchun_date = solar_terms['입춘']
-    
-    # 입춘 이전에 태어났으면 전년도를 기준으로 함
-    calc_year = year if current_date >= ipchun_date else year - 1
-    
-    # 기준점: 1864년(갑자년)
-    offset = (calc_year - 1864) % 60
-    
-    # 띠는 입춘 기준
-    zodiac_year = year if current_date >= ipchun_date else year -1
-    zodiac = ZODIAC[(zodiac_year - 4) % 12]
+    # 라이브러리 실패시 기존 방식 사용
+    offset = (year - 1864) % 60
+    return SIXTY_GAPJA[offset], ZODIAC[(year - 4) % 12]
 
-    return SIXTY_GAPJA[offset], zodiac
 
-def get_month_pillar(year, month, day, hour, minute):
-    """월주(Month Pillar) 계산"""
-    current_date = datetime(year, month, day, hour, minute)
+def get_month_pillar(year, month, day):
+    """월주(Month Pillar) 계산 - korean_lunar_calendar 라이브러리 사용"""
+    try:
+        calendar = KoreanLunarCalendar()
+        if calendar.setSolarDate(year, month, day):
+            gapja_string = calendar.getGapJaString()
+            # "갑자년 정축월 무인일" 형식에서 월주만 추출
+            parts = gapja_string.split()
+            if len(parts) >= 2:
+                month_pillar = parts[1][:-1]  # "정축월"에서 "월" 제거
+                return month_pillar
+    except:
+        pass
     
-    # 년주 계산을 위해 입춘 기준 년도 다시 계산
-    solar_terms_current_year = get_solar_terms_for_year(year)
-    ipchun_date = solar_terms_current_year['입춘']
-    calc_year = year if current_date >= ipchun_date else year - 1
-
-    # 월주 계산을 위한 절기 리스트 (절기이름, 지지 인덱스)
-    month_definitions = [
-        ('입춘', 2), ('경칩', 3), ('청명', 4), ('입하', 5), ('망종', 6), ('소서', 7),
-        ('입추', 8), ('백로', 9), ('한로', 10), ('입동', 11), ('대설', 0), ('소한', 1)
+    # 라이브러리 실패시 기존 방식 사용
+    current_date = datetime(year, month, day)
+    ipcun_date = get_solar_term_date(year, '입춘')
+    
+    calc_year = year
+    if current_date < ipcun_date:
+        calc_year = year - 1
+    
+    month_terms = [
+        ('입춘', 2), ('경칩', 3), ('청명', 4), ('입하', 5),
+        ('망종', 6), ('소서', 7), ('입추', 8), ('백로', 9),
+        ('한로', 10), ('입동', 11), ('대설', 0), ('소한', 1),
     ]
     
-    # 해당 년도와 다음 년도의 절기 정보를 가져옴
-    solar_terms = get_solar_terms_for_year(calc_year)
-    solar_terms_next_year = get_solar_terms_for_year(calc_year + 1)
+    month_jiji_index = 1
+    for i, (term_name, jiji_idx) in enumerate(month_terms):
+        term_date = get_solar_term_date(calc_year if i < 10 else calc_year + 1, term_name)
+        if i < len(month_terms) - 1:
+            next_term_date = get_solar_term_date(
+                calc_year if i + 1 < 10 else calc_year + 1, 
+                month_terms[i + 1][0]
+            )
+            if term_date <= current_date < next_term_date:
+                month_jiji_index = jiji_idx
+                break
+        else:
+            if current_date >= term_date or current_date < get_solar_term_date(calc_year, '입춘'):
+                month_jiji_index = jiji_idx
     
-    month_jiji_index = -1
-
-    for i in range(len(month_definitions)):
-        term_name, jiji_idx = month_definitions[i]
-        
-        # 현재 절기 날짜
-        if term_name in ['대설', '소한']: # 동지, 소한, 대한은 다음 해에 걸쳐 있을 수 있음
-             term_date = solar_terms_next_year.get(term_name)
-             if term_name == '대설' and term_date.month != 12 : # 12월이 아니면 전년도 대설
-                 term_date = solar_terms.get(term_name)
-        else:
-            term_date = solar_terms[term_name]
-
-        # 다음 절기 날짜
-        next_term_name = month_definitions[(i + 1) % 12][0]
-        if next_term_name in ['입춘', '경칩', '청명']:
-            next_term_date = solar_terms_next_year.get(next_term_name)
-        else:
-            next_term_date = solar_terms.get(next_term_name, solar_terms_next_year.get(next_term_name))
-            
-        if term_date <= current_date < next_term_date:
-            month_jiji_index = jiji_idx
-            break
-            
-    # 예외 처리: 반복문에서 월주를 찾지 못한 경우 (연말연시 경계)
-    if month_jiji_index == -1:
-        if current_date >= solar_terms_next_year['소한'] or current_date < solar_terms_current_year['입춘']:
-              month_jiji_index = 1 # 축월
-        elif current_date >= solar_terms.get('대설', solar_terms_next_year.get('대설')):
-              month_jiji_index = 0 # 자월
-
-
-    # 년간(Heavenly Stem of the year)에 따른 월간(Heavenly Stem of the month) 계산
-    year_pillar_gan, _ = get_year_pillar(year, month, day, hour, minute)
-    year_cheongan = year_pillar_gan[0]
+    year_cheongan = get_year_pillar(calc_year)[0][0]
     year_cheongan_index = CHEONGAN.find(year_cheongan)
     
-    # 년간에 따른 월간 조견표 (인월 기준)
-    # 갑기년->병인월, 을경년->무인월, 병신년->경인월, 정임년->임인월, 무계년->갑인월
-    month_cheongan_start_map = {'갑': '병', '을': '무', '병': '경', '정': '임', '무': '갑',
-                                '기': '병', '경': '무', '신': '경', '임': '임', '계': '갑'}
+    month_cheongan_start_map = [2, 4, 6, 8, 0]
+    start_cheongan_index = month_cheongan_start_map[year_cheongan_index % 5]
     
-    start_cheongan = month_cheongan_start_map[year_cheongan]
-    start_cheongan_index = CHEONGAN.find(start_cheongan)
-    
-    # 인월(지지 인덱스 2)부터 시작하므로, 월 지지 인덱스에서 2를 빼서 월간을 계산
-    month_cheongan_index = (start_cheongan_index + (month_jiji_index - 2)) % 10
-
-    # 자월, 축월은 인월 이전이므로 보정
+    month_cheongan_index = (start_cheongan_index + month_jiji_index - 2) % 10
     if month_jiji_index < 2:
-        month_cheongan_index = (start_cheongan_index + (month_jiji_index + 10)) % 10
-
+        month_cheongan_index = (start_cheongan_index + month_jiji_index + 10) % 10
+    
     return CHEONGAN[month_cheongan_index] + JIJI[month_jiji_index]
 
 
-def get_day_pillar(year, month, day, hour):
-    """일주(Day Pillar) 계산 (야자시 적용)"""
-    target_date = datetime(year, month, day)
-
-    # 야자시(23:00-23:59)인 경우 다음 날로 계산
-    if hour == 23:
-        target_date += timedelta(days=1)
-
-    # 기준일: 2000년 1월 1일 (경진일, 47번째 갑자)
+def get_day_pillar(year, month, day):
+    """일주(Day Pillar) 계산 - korean_lunar_calendar 라이브러리 사용"""
+    try:
+        calendar = KoreanLunarCalendar()
+        if calendar.setSolarDate(year, month, day):
+            gapja_string = calendar.getGapJaString()
+            # "갑자년 정축월 무인일" 형식에서 일주만 추출
+            parts = gapja_string.split()
+            if len(parts) >= 3:
+                day_pillar = parts[2][:-1]  # "무인일"에서 "일" 제거
+                return day_pillar
+    except:
+        pass
+    
+    # 라이브러리 실패시 기존 방식 사용
     ref_date = datetime(2000, 1, 1)
+    target_date = datetime(year, month, day)
     delta = target_date - ref_date
     days_diff = delta.days
-    
-    ref_gapja_index = 46  # 경진일은 47번째 이므로 인덱스는 46
+    ref_gapja_index = 46
     day_gapja_index = (ref_gapja_index + days_diff) % 60
-    
     return SIXTY_GAPJA[day_gapja_index]
+
 
 def get_hour_pillar(day_pillar_cheongan, hour):
     """시주(Hour Pillar) 계산"""
-    # 시간대별 지지 매핑 (야자시/조자시 구분)
-    if 23 <= hour or hour < 1: hour_jiji_index = 0  # 자시
-    elif 1 <= hour < 3: hour_jiji_index = 1   # 축시
-    elif 3 <= hour < 5: hour_jiji_index = 2   # 인시
-    elif 5 <= hour < 7: hour_jiji_index = 3   # 묘시
-    elif 7 <= hour < 9: hour_jiji_index = 4   # 진시
-    elif 9 <= hour < 11: hour_jiji_index = 5  # 사시
-    elif 11 <= hour < 13: hour_jiji_index = 6 # 오시
-    elif 13 <= hour < 15: hour_jiji_index = 7 # 미시
-    elif 15 <= hour < 17: hour_jiji_index = 8 # 신시
-    elif 17 <= hour < 19: hour_jiji_index = 9 # 유시
-    elif 19 <= hour < 21: hour_jiji_index = 10# 술시
-    else: hour_jiji_index = 11 # 해시 (21-23시)
+    # 시간대별 지지 매핑
+    if hour == 23 or hour == 0:
+        hour_jiji_index = 0  # 자시 (23:00-0:59)
+    elif 1 <= hour <= 2:
+        hour_jiji_index = 1  # 축시 (1:00-2:59)
+    elif 3 <= hour <= 4:
+        hour_jiji_index = 2  # 인시 (3:00-4:59)
+    elif 5 <= hour <= 6:
+        hour_jiji_index = 3  # 묘시 (5:00-6:59)
+    elif 7 <= hour <= 8:
+        hour_jiji_index = 4  # 진시 (7:00-8:59)
+    elif 9 <= hour <= 10:
+        hour_jiji_index = 5  # 사시 (9:00-10:59)
+    elif 11 <= hour <= 12:
+        hour_jiji_index = 6  # 오시 (11:00-12:59)
+    elif 13 <= hour <= 14:
+        hour_jiji_index = 7  # 미시 (13:00-14:59)
+    elif 15 <= hour <= 16:
+        hour_jiji_index = 8  # 신시 (15:00-16:59)
+    elif 17 <= hour <= 18:
+        hour_jiji_index = 9  # 유시 (17:00-18:59)
+    elif 19 <= hour <= 20:
+        hour_jiji_index = 10  # 술시 (19:00-20:59)
+    else:  # 21-22시
+        hour_jiji_index = 11  # 해시 (21:00-22:59)
     
+    # 시간(지지)
     hour_jiji = JIJI[hour_jiji_index]
     
-    # 일간에 따른 시천간 조견표 (자시 기준)
-    # 갑기일->갑자시, 을경일->병자시, 병신일->무자시, 정임일->경자시, 무계일->임자시
+    # 시의 천간 계산 (일간 기준)
     day_cheongan_index = CHEONGAN.find(day_pillar_cheongan)
     
-    if day_pillar_cheongan in "갑기": start_cheongan_index = CHEONGAN.find("갑")
-    elif day_pillar_cheongan in "을경": start_cheongan_index = CHEONGAN.find("병")
-    elif day_pillar_cheongan in "병신": start_cheongan_index = CHEONGAN.find("무")
-    elif day_pillar_cheongan in "정임": start_cheongan_index = CHEONGAN.find("경")
-    else: start_cheongan_index = CHEONGAN.find("임") # 무계일
-
+    # 일간에 따른 시천간 조견표
+    hour_cheongan_start_map = [0, 2, 4, 6, 8]  # 갑, 병, 무, 경, 임
+    start_cheongan_index = hour_cheongan_start_map[day_cheongan_index % 5]
+    
     hour_cheongan_index = (start_cheongan_index + hour_jiji_index) % 10
     
     return CHEONGAN[hour_cheongan_index] + hour_jiji
@@ -196,23 +194,22 @@ def index():
             month = birth_datetime.month
             day = birth_datetime.day
             hour = birth_datetime.hour
-            minute = birth_datetime.minute
 
             # 1. 년주 계산
-            year_pillar, zodiac = get_year_pillar(year, month, day, hour, minute)
+            year_pillar, zodiac = get_year_pillar(year)
             
             # 2. 월주 계산
-            month_pillar = get_month_pillar(year, month, day, hour, minute)
+            month_pillar = get_month_pillar(year, month, day)
 
             # 3. 일주 계산
-            day_pillar = get_day_pillar(year, month, day, hour)
+            day_pillar = get_day_pillar(year, month, day)
 
             # 4. 시주 계산
             day_pillar_cheongan = day_pillar[0]
             hour_pillar = get_hour_pillar(day_pillar_cheongan, hour)
             
             result = {
-                'birth_info': f"{year}년 {month}월 {day}일 {hour}시 {minute}분",
+                'birth_info': f"{year}년 {month}월 {day}일 {hour}시",
                 'zodiac': zodiac,
                 'year_pillar': year_pillar,
                 'month_pillar': month_pillar,
