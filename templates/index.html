@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>온라인 만세력</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        .hanja {
+            font-size: 2.5rem;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8 md:p-12 my-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">온라인 만세력</h1>
+            <p class="text-gray-500 mt-2">생년월일시를 입력하여 사주팔자를 확인하세요.</p>
+        </header>
+
+        <main>
+            <form action="/" method="post" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="birth_date" class="block text-sm font-medium text-gray-700 mb-2">생년월일</label>
+                        <input type="date" id="birth_date" name="birth_date" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                    </div>
+                    <div>
+                        <label for="birth_time" class="block text-sm font-medium text-gray-700 mb-2">태어난 시간</label>
+                        <input type="time" id="birth_time" name="birth_time" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                    </div>
+                </div>
+                <div>
+                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300">
+                        만세력 보기
+                    </button>
+                </div>
+            </form>
+
+            {% if result %}
+            <section id="result-section" class="mt-10 pt-8 border-t border-gray-200">
+                {% if result.error %}
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+                        <p class="font-bold">오류</p>
+                        <p>{{ result.error }}</p>
+                    </div>
+                {% else %}
+                    <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">사주팔자 결과</h2>
+                    <div class="bg-gray-50 p-6 rounded-lg">
+                        <p class="text-center text-lg text-gray-600 mb-6">
+                            <strong>{{ result.birth_info }}</strong> ({{ result.zodiac }}띠)
+                        </p>
+                        <div class="grid grid-cols-4 gap-4 text-center">
+                            <div>
+                                <h3 class="font-semibold text-gray-500">시주(時柱)</h3>
+                                <p class="hanja text-blue-600">{{ result.hour_pillar }}</p>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-500">일주(日柱)</h3>
+                                <p class="hanja text-green-600">{{ result.day_pillar }}</p>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-500">월주(月柱)</h3>
+                                <p class="hanja text-red-600">{{ result.month_pillar }}</p>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-500">년주(年柱)</h3>
+                                <p class="hanja text-purple-600">{{ result.year_pillar }}</p>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </section>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>
